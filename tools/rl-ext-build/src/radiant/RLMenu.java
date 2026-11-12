@@ -3,6 +3,7 @@ package radiant;
 import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -26,6 +27,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import androidx.compose.foundation.ClickableKt;
@@ -39,7 +41,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 // Quick Menu, long press the sparkle for lyrics options
-public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWindowInsetsListener {
+public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWindowInsetsListener, SeekBar.OnSeekBarChangeListener {
     private static final String TAG = "RLMenu";
 
     private static final int OPEN = 0;
@@ -52,6 +54,11 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
     private static final int RADIANT_AI = 15;
     private static final int SYNC = 16;
     private static final int FLUSH = 17;
+    private static final int SPICY_PAGE = 18;
+    private static final int SPICY_STYLE = 19;
+    private static final int SPICY_LETTERS = 20;
+    private static final int SPICY_PUSH = 21;
+    private static final String[] STYLE_LABELS = {"Classic", "Spicy"};
 
     private static final RLMenu OPEN_FN = new RLMenu(OPEN, 0);
     private static final RLMenu NOOP_FN = new RLMenu(NOOP, 0);
@@ -65,6 +72,9 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
     private static BottomSheetDialog dialog;
     private static LinearLayout list;
     private static boolean languagePage;
+    private static boolean spicyPage;
+    // Value labels of the Spicy sliders, updated while dragging
+    private static final TextView[] sliderValues = new TextView[6];
     private static long lastOpenMs;
 
     private final int action;
@@ -179,6 +189,7 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
         dialog = d;
         list = rows;
         languagePage = false;
+        spicyPage = false;
         refresh();
         d.show();
         scroll.requestApplyInsets();
@@ -200,6 +211,10 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
         if (l == null) return;
         l.removeAllViews();
         Context c = l.getContext();
+        if (spicyPage) {
+            spicyRows(l);
+            return;
+        }
         if (languagePage) {
             l.addView(item(l, "ic_arrows_left_medium", "Translation Language", true, BACK, 0));
             int cur = RLSettings.languageIndex();
@@ -212,6 +227,12 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
         }
 
         l.addView(syncRow(l));
+        View spicyRow = item(l, "ic_media_lyrics_large", "Spicy Lyrics", true, SPICY_PAGE, 0);
+        TextView spicyValue = new TextView(c);
+        spicyValue.setText(STYLE_LABELS[RLSettings.spicy() ? 1 : 0] + "  ›");
+        spicyValue.setTextColor(0x99FFFFFF);
+        spicyValue.setTextSize(14f);
+        l.addView(withEnd(l, spicyRow, spicyValue));
         l.addView(toggle(l, "ic_text_formatting_alphabetical_large", "Romanization", RLSettings.romanize(), ROMANIZE));
         l.addView(toggle(l, "ic_social_globe_large", "Translation", RLSettings.translate(), TRANSLATE));
         if (RLSettings.translate()) {
@@ -235,6 +256,129 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
                 : item(l, "ic_media_lyric_sync_medium", "Flush Lyrics", !busy, FLUSH, 0);
         if (retime && !busy) rainbow(flush);
         l.addView(flush);
+    }
+
+    // Spicy Lyrics page: style, toggles and sliders
+    private static void spicyRows(LinearLayout l) {
+        l.addView(item(l, "ic_arrows_left_medium", "Spicy Lyrics", true, BACK, 0));
+        l.addView(segRow(l, STYLE_LABELS, RLSettings.spicy() ? 1 : 0, SPICY_STYLE));
+        if (!RLSettings.spicy()) return;
+        l.addView(sliderRow(l, "Glow", RLSettings.SPICY_GLOW));
+        l.addView(sliderRow(l, "Word growth", RLSettings.SPICY_GROWTH));
+        l.addView(sliderRow(l, "Lift", RLSettings.SPICY_LIFT));
+        l.addView(toggle(l, "ic_text_formatting_alphabetical_large", "Letter by letter on long words", RLSettings.spicyLetters(), SPICY_LETTERS));
+        if (RLSettings.spicyLetters()) l.addView(sliderRow(l, "Long word from", RLSettings.SPICY_LETTER_MS));
+        l.addView(toggle(l, "ic_text_formatting_list_large", "Growing letters push neighbours", RLSettings.spicyPush(), SPICY_PUSH));
+        if (RLSettings.spicyPush()) l.addView(sliderRow(l, "Push strength", RLSettings.SPICY_PUSH_PCT));
+    }
+
+    private static String fmt(int key, int v) {
+        switch (key) {
+            case RLSettings.SPICY_GROWTH:
+            case RLSettings.SPICY_PUSH_PCT:
+                return v + "%";
+            case RLSettings.SPICY_LIFT:
+                return (v / 10) + "." + (v % 10) + " px";
+            case RLSettings.SPICY_LETTER_MS:
+                return (v / 1000) + "." + ((v % 1000) / 100) + ((v % 100) / 10) + " s";
+            default:
+                return String.valueOf(v);
+        }
+    }
+
+    // Title and value on top, slider below
+    private static View sliderRow(ViewGroup parent, String title, int key) {
+        Context c = parent.getContext();
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(c, 72), dp(c, 6), dp(c, 16), dp(c, 6));
+        LinearLayout top = new LinearLayout(c);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        TextView name = new TextView(c);
+        name.setText(title);
+        name.setTextColor(color(c, true));
+        name.setTextSize(15f);
+        top.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView value = new TextView(c);
+        value.setText(fmt(key, RLSettings.spicyValue(key)));
+        value.setTextColor(0x99FFFFFF);
+        value.setTextSize(14f);
+        top.addView(value, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        sliderValues[key] = value;
+        box.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        SeekBar sb = new SeekBar(c);
+        sb.setMax(RLSettings.spicyMax(key) - RLSettings.spicyMin(key));
+        sb.setProgress(RLSettings.spicyValue(key) - RLSettings.spicyMin(key));
+        sb.setProgressTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        sb.setThumbTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        sb.setProgressBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
+        sb.setOnSeekBarChangeListener(new RLMenu(NOOP, key));
+        box.addView(sb, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        box.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return box;
+    }
+
+    @Override
+    public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+        if (!fromUser) return;
+        try {
+            int v = progress + RLSettings.spicyMin(arg);
+            RLSettings.setSpicyValue(arg, v);
+            TextView t = sliderValues[arg];
+            if (t != null) t.setText(fmt(arg, v));
+        } catch (Throwable t) {
+            Log.e(TAG, "slider " + arg + " failed", t);
+        }
+    }
+
+    @Override
+    public void onStartTrackingTouch(SeekBar sb) {}
+
+    @Override
+    public void onStopTrackingTouch(SeekBar sb) {}
+
+    // Segmented control with any labels
+    private static View segRow(ViewGroup parent, String[] labels, int cur, int action) {
+        Context c = parent.getContext();
+        View row = item(parent, "ic_media_lyrics_large", "", true, NOOP, 0);
+        row.setOnClickListener(null);
+        row.setClickable(false);
+        FrameLayout f = new FrameLayout(c);
+        ViewGroup.LayoutParams rp = row.getLayoutParams();
+        int h = rp != null && rp.height > 0 ? rp.height : dp(c, 56);
+        f.addView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
+        LinearLayout seg = new LinearLayout(c);
+        seg.setOrientation(LinearLayout.HORIZONTAL);
+        GradientDrawable track = new GradientDrawable();
+        track.setCornerRadius(dp(c, 10));
+        track.setColor(0x1FFFFFFF);
+        seg.setBackground(track);
+        int pad = dp(c, 3);
+        seg.setPadding(pad, pad, pad, pad);
+        for (int i = 0; i < labels.length; i++) {
+            TextView b = new TextView(c);
+            b.setText(labels[i]);
+            b.setGravity(Gravity.CENTER);
+            b.setTextSize(13f);
+            b.setTypeface(Typeface.DEFAULT_BOLD);
+            if (i == cur) {
+                GradientDrawable sel = new GradientDrawable();
+                sel.setCornerRadius(dp(c, 8));
+                sel.setColor(0xFFFFFFFF);
+                b.setBackground(sel);
+                b.setTextColor(0xFF000000);
+            } else {
+                b.setTextColor(0xB3FFFFFF);
+            }
+            b.setOnClickListener(new RLMenu(action, i));
+            seg.addView(b, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        }
+        FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 36), Gravity.CENTER_VERTICAL);
+        sp.setMarginStart(dp(c, 72));
+        sp.setMarginEnd(dp(c, 16));
+        f.addView(seg, sp);
+        f.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h));
+        return f;
     }
 
     // TIDAL's context_menu_item row
@@ -376,6 +520,19 @@ public final class RLMenu implements yl0.a, View.OnClickListener, View.OnApplyWi
                     break;
                 case BACK:
                     languagePage = false;
+                    spicyPage = false;
+                    break;
+                case SPICY_PAGE:
+                    spicyPage = true;
+                    break;
+                case SPICY_STYLE:
+                    RLSettings.setSpicyValue(RLSettings.SPICY_STYLE, arg);
+                    break;
+                case SPICY_LETTERS:
+                    RLSettings.setSpicyLetters(!RLSettings.spicyLetters());
+                    break;
+                case SPICY_PUSH:
+                    RLSettings.setSpicyPush(!RLSettings.spicyPush());
                     break;
                 case RADIANT_AI:
                     RLSettings.setRadiantAI(!RLSettings.radiantAI());

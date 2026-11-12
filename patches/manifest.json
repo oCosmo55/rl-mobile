@@ -48,6 +48,8 @@
         "radiant/RLAPILyricsWorker.smali",
         "radiant/WordLyrics.smali",
         "radiant/WordLyricsTick.smali",
+        "radiant/SpicyLyrics.smali",
+        "radiant/SpicySpan.smali",
         "radiant/SylBrush.smali",
         "radiant/SylLayout.smali",
         "radiant/RLDefaults.smali",

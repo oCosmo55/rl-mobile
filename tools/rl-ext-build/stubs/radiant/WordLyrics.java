@@ -7,6 +7,21 @@ import androidx.compose.ui.text.SpanStyle;
 // Handwritten smali (patches/extension/radiant/WordLyrics.smali)
 public final class WordLyrics {
     public static boolean dualSide;
+    // Per line data from the RL API payload
+    public static String[][] lineSylText, lineWordText;
+    public static long[][] lineSylStart, lineSylDur, lineWordStart;
+    public static boolean[][] lineSylBg, lineWordBg;
+    public static long[] lineEnds;
+    // Scratch shared with the render helpers
+    public static int[] pBeg, pFin, pVis;
+    public static boolean[] pBg;
+    public static long[] pStarts, pDurs;
+    public static int pN, pTotal, pBgStart, pLineIdx;
+    public static long pNow;
+    static boolean[] bgFlags(boolean[][] all, int line, int n) { return null; }
+    static void emitLine(AnnotatedString.Builder b, String[] row) {}
+    static void applyParagraphs(AnnotatedString.Builder b, int line, int bgStart, int total) {}
+    static String stripBrackets(String s) { return s; }
     public static long tmpSung, tmpUnsung;
     public static AnnotatedString render(int i, int a, String t, long s, long u) { return null; }
     public static AnnotatedString renderSyl(int i, int a, String t, long s, long u) { return null; }

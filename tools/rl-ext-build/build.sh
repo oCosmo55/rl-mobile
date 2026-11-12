@@ -39,7 +39,12 @@ find "$out/classes" -name '*.class' > "$out/class.list"
       --output "$out/dex" @"$out/class.list"
 
 echo "==> baksmali"
-"$java" -jar "$BAKSMALI" d "$out/dex/classes.dex" -o "$out/smali"
+if [ -n "${BAKSMALI_CP:-}" ]; then
+    # baksmali as a classpath (Maven jars), used by the GitHub workflow
+    "$java" -cp "$BAKSMALI_CP" org.jf.baksmali.Main d "$out/dex/classes.dex" -o "$out/smali"
+else
+    "$java" -jar "$BAKSMALI" d "$out/dex/classes.dex" -o "$out/smali"
+fi
 
 echo "==> post-process"
 find "$out/smali" -name '*.smali' -print0 | xargs -0 sed -i \
@@ -58,7 +63,7 @@ fi
 
 dest="$repo/patches/extension/radiant"
 for c in AiSparkle AnimatedCovers AnimatedCoverView RoundOutline SparkleIcons \
-         RLSettings RLLyrics RLHttp RLTask RLMenu RLSwitch ArtPlayer CoverPlayer FadeIn QualitySeek RLTopButton; do
+         RLSettings RLLyrics RLHttp RLTask RLMenu RLSwitch ArtPlayer CoverPlayer FadeIn QualitySeek RLTopButton SpicyLyrics; do
     rm -f "$dest/$c".smali
     cp "$out"/smali/radiant/"$c".smali "$dest/"
     echo "    -> patches/extension/radiant/$c.smali"

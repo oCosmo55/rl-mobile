@@ -37,6 +37,24 @@ public final class RLSettings {
     static final int TOASTS_ALL = 2;
     private static volatile int toasts;
 
+    // Spicy lyric style, in app only (not Manager options), defaults picked in the browser preview
+    static final int SPICY_STYLE = 0;
+    static final int SPICY_GLOW = 1;
+    static final int SPICY_GROWTH = 2;
+    static final int SPICY_LIFT = 3;
+    static final int SPICY_LETTER_MS = 4;
+    static final int SPICY_PUSH_PCT = 5;
+    static final String[] SPICY_KEYS = {"sp_on", "sp_glow", "sp_growth", "sp_lift", "sp_letterMs", "sp_pushPct"};
+    // on(1/0), glow 0-100, growth % 0-25, lift in tenths of px 0-100, long word ms, push 0-100
+    private static final int[] SPICY_DEFAULTS = {1, 60, 8, 35, 1000, 100};
+    private static final int[] SPICY_MIN = {0, 0, 0, 0, 300, 0};
+    private static final int[] SPICY_MAX = {1, 100, 25, 100, 2000, 100};
+    private static final int[] spicyVals = SPICY_DEFAULTS.clone();
+    private static volatile boolean spicyLetters = true;
+    private static volatile boolean spicyPush = true;
+    private static volatile boolean spicyLoaded;
+    private static volatile float density = 3f;
+
     private RLSettings() {}
 
     static Context app() {
@@ -97,6 +115,106 @@ public final class RLSettings {
                 .putBoolean("radiantAI", radiantAI)
                 .putInt("sync", sync)
                 .apply();
+    }
+
+    // Spicy settings
+
+    private static void spicyLoad() {
+        if (spicyLoaded) return;
+        synchronized (RLSettings.class) {
+            if (spicyLoaded) return;
+            SharedPreferences p = prefs();
+            if (p != null) {
+                for (int i = 0; i < SPICY_KEYS.length; i++) {
+                    spicyVals[i] = clampSpicy(i, p.getInt(SPICY_KEYS[i], SPICY_DEFAULTS[i]));
+                }
+                spicyLetters = p.getBoolean("sp_letters", true);
+                spicyPush = p.getBoolean("sp_push", true);
+                Context c = app();
+                if (c != null) density = c.getResources().getDisplayMetrics().density;
+            }
+            spicyLoaded = true;
+        }
+    }
+
+    private static int clampSpicy(int key, int v) {
+        return v < SPICY_MIN[key] ? SPICY_MIN[key] : v > SPICY_MAX[key] ? SPICY_MAX[key] : v;
+    }
+
+    static int spicyMin(int key) {
+        return SPICY_MIN[key];
+    }
+
+    static int spicyMax(int key) {
+        return SPICY_MAX[key];
+    }
+
+    static int spicyValue(int key) {
+        spicyLoad();
+        return spicyVals[key];
+    }
+
+    static void setSpicyValue(int key, int v) {
+        spicyLoad();
+        spicyVals[key] = clampSpicy(key, v);
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putInt(SPICY_KEYS[key], spicyVals[key]).apply();
+        RLLyrics.bump();
+    }
+
+    static void setSpicyLetters(boolean on) {
+        spicyLoad();
+        spicyLetters = on;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("sp_letters", on).apply();
+        RLLyrics.bump();
+    }
+
+    static void setSpicyPush(boolean on) {
+        spicyLoad();
+        spicyPush = on;
+        SharedPreferences p = prefs();
+        if (p != null) p.edit().putBoolean("sp_push", on).apply();
+        RLLyrics.bump();
+    }
+
+    public static boolean spicy() {
+        return spicyValue(SPICY_STYLE) != 0;
+    }
+
+    static int spicyGlow() {
+        return spicyValue(SPICY_GLOW);
+    }
+
+    static int spicyGrowth() {
+        return spicyValue(SPICY_GROWTH);
+    }
+
+    static int spicyLiftTenths() {
+        return spicyValue(SPICY_LIFT);
+    }
+
+    static long spicyLetterMs() {
+        return spicyValue(SPICY_LETTER_MS);
+    }
+
+    static int spicyPushPct() {
+        return spicyValue(SPICY_PUSH_PCT);
+    }
+
+    static boolean spicyLetters() {
+        spicyLoad();
+        return spicyLetters;
+    }
+
+    static boolean spicyPush() {
+        spicyLoad();
+        return spicyPush;
+    }
+
+    static float density() {
+        spicyLoad();
+        return density;
     }
 
     private static int clampLang(int i) {

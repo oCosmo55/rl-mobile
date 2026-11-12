@@ -314,6 +314,10 @@ public final class RLLyrics {
         String[] t = trans;
         boolean translated = RLAPILyricsHook.isRlState && RLSettings.translate() && t != null && idx >= 0 && idx < t.length && t[idx] != null;
         if (!translated) {
+            if (mode != RLSettings.SYNC_LINE && RLSettings.spicy()) {
+                AnnotatedString spicy = SpicyLyrics.render(idx, mode, sung, unsung);
+                if (spicy != null) return spicy;
+            }
             if (mode == RLSettings.SYNC_SYLLABLE) return WordLyrics.renderSyl(idx, active, text, sung, unsung);
             if (mode == RLSettings.SYNC_WORD) return WordLyrics.render(idx, active, text, sung, unsung);
             return new AnnotatedString.Builder(text).toAnnotatedString();
